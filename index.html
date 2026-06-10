@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PDF Grid Arranger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/tabler-icons.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --surface-2: #f4f4f5;
+      --border: #e4e4e7;
+      --border-2: #d4d4d8;
+      --text: #18181b;
+      --text-2: #71717a;
+      --text-3: #a1a1aa;
+      --accent: #18181b;
+      --accent-fg: #fafafa;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* NAV */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo i { color: var(--text-2); font-size: 20px; }
+
+    /* MAIN */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* TOOLBAR */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .seg {
+      display: flex;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .seg button {
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--border-2);
+      padding: 7px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-2);
+      cursor: pointer;
+      transition: background .12s, color .12s;
+      font-family: inherit;
+    }
+    .seg button:last-child { border-right: none; }
+    .seg button.active { background: var(--accent); color: var(--accent-fg); }
+    .seg button:hover:not(.active) { background: var(--surface-2); color: var(--text); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .12s, opacity .12s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+    .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+    .btn.primary:hover { opacity: .85; }
+    .btn i { font-size: 15px; }
+
+    /* UPLOAD ZONE */
+    #dropZone {
+      border: 1.5px dashed var(--border-2);
+      border-radius: var(--radius-lg);
+      padding: 56px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      margin-bottom: 24px;
+      background: var(--surface);
+    }
+    #dropZone:hover, #dropZone.drag { border-color: var(--accent); background: var(--surface-2); }
+    #dropZone .dz-icon { font-size: 40px; color: var(--text-3); margin-bottom: 12px; }
+    #dropZone h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    #dropZone p { font-size: 13px; color: var(--text-2); }
+
+    /* STATUS BAR */
+    #status {
+      display: none;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 16px;
+      align-items: center;
+      gap: 8px;
+    }
+    #status.show { display: flex; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border-2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* STATS */
+    #statsRow {
+      display: none;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    #statsRow.show { display: grid; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    .stat-val { font-size: 24px; font-weight: 700; line-height: 1; }
+    .stat-lbl { font-size: 11px; color: var(--text-2); margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* INFO STRIP */
+    #infoStrip {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 24px;
+      align-items: center;
+      gap: 8px;
+    }
+    #infoStrip.show { display: flex; }
+    #infoStrip i { color: var(--accent); flex-shrink: 0; }
+
+    /* CLOUD STATUS */
+    #cloudStatus {
+      display: none;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      margin-bottom: 16px;
+      align-items: center;
+      gap: 8px;
+    }
+    #cloudStatus.show { display: flex; }
+    #cloudStatus.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    #cloudStatus.error   { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    #cloudStatus.loading { border-color: var(--border); background: var(--surface); color: var(--text-2); }
+
+    /* PREVIEW */
+    .sheet-group { margin-bottom: 36px; }
+    .sheet-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--text-2);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sheet-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .sheet-side { display: flex; flex-direction: column; gap: 4px; }
+    .sheet-side-lbl { font-size: 11px; color: var(--text-3); font-weight: 500; }
+
+    .sheet-wrap {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 210/297;
+      display: grid;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .grid-cell {
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: var(--surface);
+    }
+    .grid-cell canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .grid-cell.empty  { background: var(--surface-2); }
+    .cell-sep-r { border-right: 1px dashed var(--border); }
+    .cell-sep-b { border-bottom: 1px dashed var(--border); }
+    .pg-num { position: absolute; bottom: 2px; right: 3px; font-size: 6px; color: var(--text-3); line-height: 1; }
+
+    /* PRINT */
+    @media print {
+      header, .toolbar, #dropZone, #status, #statsRow, #infoStrip, #cloudStatus { display: none !important; }
+      main { padding: 0; max-width: none; }
+      .sheet-group { margin: 0; }
+      .sheet-row { display: block; }
+      .sheet-side { break-after: page; }
+      .sheet-side-lbl { display: none; }
+      .sheet-wrap { border: none; border-radius: 0; box-shadow: none; aspect-ratio: auto; width: 210mm; height: 297mm; }
+    }
+
+    @media (max-width: 640px) {
+      #statsRow.show { grid-template-columns: repeat(2, 1fr); }
+      .sheet-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="nav-inner">
+    <div class="logo">
+      <i class="ti ti-file-type-pdf"></i>
+      PDF Grid Arranger
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="toolbar">
+    <div class="seg" id="gridSel">
+      <button data-g="2">2×2</button>
+      <button data-g="3" class="active">3×3</button>
+      <button data-g="4">4×4</button>
+    </div>
+    <button class="btn primary" id="uploadBtn"><i class="ti ti-upload"></i> Upload PDF</button>
+    <button class="btn" id="downloadBtn" disabled><i class="ti ti-download"></i> Download PDF</button>
+    <button class="btn" id="saveBtn" disabled><i class="ti ti-cloud-upload"></i> Save to Cloud</button>
+    <button class="btn" id="printBtn"><i class="ti ti-printer"></i> Print</button>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none">
+  </div>
+
+  <div id="dropZone">
+    <div class="dz-icon"><i class="ti ti-file-type-pdf"></i></div>
+    <h3>Drop a PDF here</h3>
+    <p>or click <strong>Upload PDF</strong> above to browse</p>
+  </div>
+
+  <div id="status"><div class="spinner"></div><span id="statusText"></span></div>
+
+  <div id="cloudStatus">
+    <i id="cloudIcon" class="ti ti-cloud-upload"></i>
+    <span id="cloudText"></span>
+  </div>
+
+  <div id="statsRow">
+    <div class="stat-card"><div class="stat-val" id="sTotalPages">0</div><div class="stat-lbl">PDF Pages</div></div>
+    <div class="stat-card"><div class="stat-val" id="sSheets">0</div><div class="stat-lbl">Print Sheets</div></div>
+    <div class="stat-card"><div class="stat-val" id="sFront">0</div><div class="stat-lbl">Front Pages</div></div>
+    <div class="stat-card"><div class="stat-val" id="sBack">0</div><div class="stat-lbl">Back Pages</div></div>
+  </div>
+
+  <div id="infoStrip">
+    <i class="ti ti-info-circle"></i>
+    Print front sides first, then flip the stack and print back sides for correct back-to-back alignment.
+  </div>
+
+  <div id="preview"></div>
+
+</main>
+
+<!-- Firebase (module) -->
+<script type="module">
+  import { initializeApp }    from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+  import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js';
+  const cfg = {
+    apiKey:            "AIzaSyAyLN2EAPAY-bQyqr1-KIN6sk_3ZM3wN0A",
+    authDomain:        "micromaker-754b0.firebaseapp.com",
+    projectId:         "micromaker-754b0",
+    storageBucket:     "micromaker-754b0.firebasestorage.app",
+    messagingSenderId: "637670266042",
+    appId:             "1:637670266042:web:798dce3b9e23e684f6de83"
+  };
+  try {
+    const app = initializeApp(cfg);
+    const storage = getStorage(app);
+    window.uploadPdfToFirebase = async (blob, filename = 'final-grid.pdf') => {
+      const snap = await uploadBytes(ref(storage, `exports/${filename}`), blob);
+      return getDownloadURL(snap.ref);
+    };
+  } catch(e) { console.warn('Firebase init failed', e); }
+</script>
+
+<script>
+/* ── state ── */
+let pdfDoc = null, gridN = 3, lastPdf = null;
+let isGenerating = false;
+const ps = () => gridN * gridN;
+
+/* ── refs ── */
+const $  = id => document.getElementById(id);
+const dz = $('dropZone');
+
+/* ── grid selector ── */
+$('gridSel').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-g]');
+  if (!btn) return;
+  gridN = +btn.dataset.g;
+  $('gridSel').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (pdfDoc) { lastPdf = null; setReady(false); renderPreview().then(() => generate(false)); }
+});
+
+/* ── upload ── */
+$('uploadBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => loadFile(e.target.files[0]));
+
+/* ── drag & drop ── */
+dz.addEventListener('click',     () => $('fileInput').click());
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop',      e => { e.preventDefault(); dz.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); });
+
+/* ── button actions ── */
+$('downloadBtn').addEventListener('click', doDownload);
+$('saveBtn').addEventListener('click', doSave);
+$('printBtn').addEventListener('click', () => window.print());
+
+/* ── helpers ── */
+function setStatus(msg) {
+  const el = $('status');
+  if (msg) { el.classList.add('show'); $('statusText').textContent = msg; }
+  else      { el.classList.remove('show'); }
+}
+function setReady(yes) {
+  $('downloadBtn').disabled = !yes || isGenerating;
+  $('saveBtn').disabled = !yes || isGenerating;
+}
+function setCloud(state, msg, linkUrl) {
+  const el = $('cloudStatus');
+  el.className = state ? `show ${state}` : '';
+  $('cloudIcon').className = 'ti ' + (state === 'success' ? 'ti-cloud-check' : state === 'error' ? 'ti-cloud-x' : 'ti-cloud-upload');
+  $('cloudText').textContent = msg;
+  if (linkUrl) {
+    const a = document.createElement('a');
+    a.href = linkUrl; a.target = '_blank'; a.textContent = 'Open file';
+    a.style.cssText = 'font-weight:600;margin-left:6px;color:inherit';
+    $('cloudText').appendChild(a);
+  }
+}
+
+/* ── load PDF ── */
+async function loadFile(file) {
+  if (!file) return;
+  if (!(file.type?.includes('pdf') || file.name.toLowerCase().endsWith('.pdf'))) {
+    setStatus('Please select a PDF file.'); return;
+  }
+  $('cloudStatus').className = '';
+  setStatus('Loading PDF…');
+  try {
+    pdfDoc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    $('sTotalPages').textContent = pdfDoc.numPages;
+    $('statsRow').classList.add('show');
+    $('infoStrip').classList.add('show');
+    dz.style.display = 'none';
+    setStatus('Rendering preview…');
+    await renderPreview();
+    setStatus('Generating PDF…');
+    setReady(false);
+    await generate(false);
+    setReady(true);
+    setStatus('');
+  } catch(err) {
+    console.error(err);
+    setStatus('Failed to load PDF. Please try a different file.');
+  }
+}
+
+/* ── sheet plan ── */
+// Each physical sheet holds ps()*2 source pages.
+// Front: pages at odd offsets within the block (1, 3, 5, …)
+// Back : pages at even offsets, row-reversed so they register on flip.
+function getSheets(total) {
+  const n = gridN, s = ps(), sheets = [];
+  for (let i = 0; i < total; i += s * 2) {
+    const front = [], back = new Array(s).fill(null);
+    for (let j = 0; j < s; j++) { const p = i + j*2 + 1; if (p <= total) front.push(p); }
+    let pos = 0;
+    for (let r = 0; r < n; r++) {
+      const row = [];
+      for (let c = 0; c < n; c++) { const p = i + (r*n + c)*2 + 2; row.push(p <= total ? p : null); }
+      row.reverse().forEach(p => back[pos++] = p);
+    }
+    sheets.push({ front, back });
+  }
+  return sheets;
+}
+
+/* ── render preview ── */
+async function renderPreview() {
+  const pv = $('preview'); pv.innerHTML = '';
+  const sheets = getSheets(pdfDoc.numPages);
+  let fc = 0, bc = 0;
+  for (let s = 0; s < sheets.length; s++) {
+    const group = document.createElement('div'); group.className = 'sheet-group';
+    const title = document.createElement('div'); title.className = 'sheet-group-title';
+    title.innerHTML = `<i class="ti ti-layout"></i> Sheet ${s + 1}`;
+    group.appendChild(title);
+    const row = document.createElement('div'); row.className = 'sheet-row';
+    for (const side of ['front','back']) {
+      const outer = document.createElement('div'); outer.className = 'sheet-side';
+      const lbl = document.createElement('div'); lbl.className = 'sheet-side-lbl';
+      lbl.textContent = side === 'front' ? 'Front side' : 'Back side (flip)';
+      outer.appendChild(lbl);
+      outer.appendChild(await buildGrid(sheets[s][side]));
+      row.appendChild(outer);
+    }
+    group.appendChild(row); pv.appendChild(group);
+    fc += sheets[s].front.length;
+    bc += sheets[s].back.filter(p => p !== null).length;
+  }
+  $('sSheets').textContent = sheets.length;
+  $('sFront').textContent  = fc;
+  $('sBack').textContent   = bc;
+}
+
+/* ── build grid DOM ── */
+async function buildGrid(pages) {
+  const wrap = document.createElement('div'); wrap.className = 'sheet-wrap';
+  wrap.style.gridTemplateColumns = `repeat(${gridN},1fr)`;
+  wrap.style.gridTemplateRows    = `repeat(${gridN},1fr)`;
+  for (let i = 0; i < ps(); i++) {
+    const cell = document.createElement('div'); cell.className = 'grid-cell';
+    const row = Math.floor(i/gridN), col = i%gridN;
+    if (col < gridN-1) cell.classList.add('cell-sep-r');
+    if (row < gridN-1) cell.classList.add('cell-sep-b');
+    if (pages[i]) {
+      const pg = await pdfDoc.getPage(pages[i]);
+      const vp = pg.getViewport({ scale: 1.5 });
+      const cv = document.createElement('canvas');
+      cv.width = vp.width; cv.height = vp.height;
+      await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      cell.appendChild(cv);
+      const num = document.createElement('div'); num.className = 'pg-num';
+      num.textContent = pages[i]; cell.appendChild(num);
+    } else { cell.classList.add('empty'); }
+    wrap.appendChild(cell);
+  }
+  return wrap;
+}
+
+/* ── generate PDF ── */
+async function generate(save = false) {
+  if (!pdfDoc || isGenerating) return;
+  isGenerating = true;
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'mm', format:'a4' });
+    const n = gridN, s = ps(), cw = 210/n, ch = 297/n;
+    const sheets = getSheets(pdfDoc.numPages);
+    for (let i = 0; i < sheets.length; i++) {
+      for (const side of ['front','back']) {
+        if (!(i===0 && side==='front')) pdf.addPage();
+        const pages = sheets[i][side];
+        pdf.setDrawColor(160); pdf.setLineWidth(0.3);
+        if (pdf.setLineDashPattern) pdf.setLineDashPattern([0.5,1.2]);
+        for (let j = 0; j < s; j++) {
+          if (!pages[j]) continue;
+          const pg = await pdfDoc.getPage(pages[j]);
+          const vp = pg.getViewport({ scale: 2 });
+          const cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height;
+          await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+          const row = Math.floor(j/n), col = j%n;
+          const x = col*cw, y = row*ch;
+          pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, cw, ch);
+          if (col < n-1) pdf.line(x+cw, y,    x+cw, y+ch);
+          if (row < n-1) pdf.line(x,    y+ch, x+cw, y+ch);
+          pdf.setTextColor(160); pdf.setFontSize(4.5);
+          pdf.text(String(pages[j]), x+cw-3, y+ch-1.5);
+        }
+        if (pdf.setLineDashPattern) pdf.setLineDashPattern([]);
+      }
+    }
+    lastPdf = pdf;
+    if (save) pdf.save('grid-arranged.pdf');
+    return pdf;
+  } finally {
+    isGenerating = false;
+  }
+}
+
+/* ── download ── */
+async function doDownload() {
+  if (isGenerating) {
+    setStatus('Already generating PDF, please wait…');
+    return;
+  }
+  if (lastPdf) {
+    try { lastPdf.save('grid-arranged.pdf'); return; } catch(e) { console.warn(e); }
+    try {
+      const blob = lastPdf.output('blob');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'grid-arranged.pdf';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href); return;
+    } catch(e) { console.error(e); }
+  }
+  setStatus('Generating PDF…');
+  $('downloadBtn').disabled = true;
+  try {
+    await generate(true);
+  } catch(err) {
+    console.error('Download error:', err);
+    setStatus('Failed to generate PDF. Please try again.');
+  } finally {
+    $('downloadBtn').disabled = false;
+    setStatus('');
+  }
+}
+
+/* ── save to Firebase ── */
+async function doSave() {
+  if (isGenerating) {
+    setCloud('error', 'Already generating PDF, please wait…'); return;
+  }
+  if (!window.uploadPdfToFirebase) {
+    setCloud('error', 'Cloud save unavailable — Firebase not initialized.'); return;
+  }
+  if (!lastPdf) { setStatus('Generating PDF…'); await generate(false); setStatus(''); }
+  let blob;
+  try { blob = lastPdf.output('blob'); } catch(e) { setCloud('error', 'Could not create PDF blob.'); return; }
+  setCloud('loading', 'Uploading to cloud…');
+  try {
+    const url = await window.uploadPdfToFirebase(blob, `grid-${Date.now()}.pdf`);
+    setCloud('success', 'Saved!', url);
+  } catch(err) {
+    console.error(err);
+    setCloud('error', 'Upload failed. Check your connection and try again.');
+  }
+}
+</script>
+
+</body>
+</html>
